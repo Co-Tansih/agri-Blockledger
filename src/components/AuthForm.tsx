@@ -38,14 +38,47 @@ const AuthForm = () => {
         
         if (error) {
           console.error('Error creating test users:', error);
+          toast({
+            title: "Test Users Setup Failed",
+            description: "Development login may not work properly. Please try manual login.",
+            variant: "destructive",
+          });
+          setTestUsersReady(false);
+        } else if (data && data.summary && data.summary.includes('error')) {
+          console.error('Test users creation reported errors:', data);
+          toast({
+            title: "Test Users Setup Issues",
+            description: "Some test users may not be available. Check console for details.",
+            variant: "destructive",
+          });
+          setTestUsersReady(false);
+        } else if (data && data.results) {
+          // Check if all users were created successfully
+          const hasErrors = data.results.some((result: any) => result.error);
+          if (hasErrors) {
+            console.error('Some test users failed to create:', data.results);
+            toast({
+              title: "Partial Test Users Setup",
+              description: "Some development accounts may not be available.",
+              variant: "destructive",
+            });
+            setTestUsersReady(false);
+          } else {
+            console.log('Test users creation response:', data);
+            setTestUsersReady(true);
+          }
         } else {
-          console.log('Test users creation response:', data);
+          console.log('Test users created successfully:', data);
           setTestUsersReady(true);
         }
       } catch (error) {
         console.error('Failed to invoke create-test-users function:', error);
-        // Set ready to true anyway so users can try dev login
-        setTestUsersReady(true);
+        toast({
+          title: "Function Invocation Failed",
+          description: "Could not set up test users. Development login unavailable.",
+          variant: "destructive",
+        });
+        setTestUsersReady(false);
       }
     };
 
