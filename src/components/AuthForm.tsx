@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import RoleSelector from './RoleSelector';
 import { Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 
 const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -39,21 +40,41 @@ const AuthForm = () => {
     }));
   };
 
-  // Dummy login for developers
+  // Developer login with real Supabase auth
   const handleDeveloperLogin = async () => {
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      toast({
-        title: "Developer Login Successful",
-        description: "Redirecting to APMC Dashboard...",
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: 'dev@agri.com',
+        password: 'Dev123@agri'
       });
-      
-      // TODO: Replace with actual Supabase auth and redirect
-      console.log("Developer login successful");
-      setLoading(false);
-    }, 1000);
+
+      if (error) {
+        toast({
+          title: "Developer Login Failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Developer Login Successful",
+          description: "Redirecting to APMC Dashboard...",
+        });
+        
+        // TODO: Implement role-based redirect
+        console.log("Developer login successful", data);
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+      console.error("Developer login error:", error);
+    }
+    
+    setLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,25 +102,73 @@ const AuthForm = () => {
       return;
     }
 
-    // TODO: Implement Supabase authentication
-    // For now, simulate success
-    setTimeout(() => {
+    try {
+      if (isLogin) {
+        // Login with Supabase
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password
+        });
+
+        if (error) {
+          toast({
+            title: "Login Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Login Successful",
+            description: "Redirecting to your dashboard...",
+          });
+          
+          // TODO: Implement role-based redirect based on user metadata
+          console.log("Login successful", data);
+        }
+      } else {
+        // Signup with Supabase
+        const { data, error } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.fullName,
+              role: formData.role,
+              district: formData.district,
+              state: formData.state
+            }
+          }
+        });
+
+        if (error) {
+          toast({
+            title: "Signup Failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Account Created Successfully",
+            description: "Please check your email to verify your account",
+          });
+          
+          console.log("Signup successful", data);
+          
+          // Switch to login mode after successful signup
+          setIsLogin(true);
+          resetForm();
+        }
+      }
+    } catch (error: any) {
       toast({
-        title: isLogin ? "Login Successful" : "Account Created",
-        description: `Redirecting to your ${formData.role || 'default'} dashboard...`,
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
       });
-      
-      // TODO: Implement role-based redirects:
-      // APMC → APMC Batch Creator Dashboard
-      // Broker → Storage Logs
-      // MNC → Processing + QR Generation Panel  
-      // Distributor → Shipment Tracker
-      // Retailer → Shelf Management
-      // Customer → Trace View
-      
-      console.log("Auth successful", { isLogin, formData });
-      setLoading(false);
-    }, 1000);
+      console.error("Auth error:", error);
+    }
+    
+    setLoading(false);
   };
 
   const resetForm = () => {
