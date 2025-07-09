@@ -69,6 +69,15 @@ const AuthForm = () => {
 
   // Development login shortcuts
   const handleDevLogin = async (role: string) => {
+    if (!testUsersReady) {
+      toast({
+        title: "Please wait",
+        description: "Test users are still being set up. Please try again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     
     try {
@@ -76,6 +85,9 @@ const AuthForm = () => {
       const password = 'password';
 
       console.log(`Attempting dev login for ${role} with email: ${email}`);
+
+      // Add a small delay to ensure user creation is complete
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const { error } = await signIn(email, password);
 
@@ -89,11 +101,8 @@ const AuthForm = () => {
       } else {
         toast({
           title: "Dev Login Successful",
-          description: `Logged in as ${role}`,
+          description: `Logged in as ${role}. Redirecting...`,
         });
-        
-        // Navigate to role-based dashboard
-        navigate(`/dashboard/${role}`);
       }
     } catch (error: any) {
       console.error("Dev login error:", error);

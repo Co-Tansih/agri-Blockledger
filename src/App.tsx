@@ -20,6 +20,7 @@ const queryClient = new QueryClient();
 // Component to handle authenticated redirects
 const AuthenticatedRedirect = () => {
   const { user, profile, loading } = useAuth();
+  const [redirecting, setRedirecting] = useState(false);
 
   if (loading) {
     return (
@@ -30,6 +31,91 @@ const AuthenticatedRedirect = () => {
   }
 
   if (user && profile) {
+    if (!redirecting) {
+      setRedirecting(true);
+      // Small delay to ensure smooth transition
+      setTimeout(() => {
+        window.location.href = `/dashboard/${profile.role}`;
+      }, 100);
+    }
+    
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to {profile.role} dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user && !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Setting up your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <Navigate to="/auth" replace />;
+};
+
+const AppRoutes = () => {
+  return (
+    <Routes>
+      <Route path="/" element={<AuthenticatedRedirect />} />
+      <Route path="/auth" element={<Auth />} />
+      
+      {/* Protected Dashboard Routes */}
+      <Route
+        path="/dashboard/farmer"
+        element={
+          <ProtectedRoute allowedRoles={['farmer']}>
+            <FarmerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/broker"
+        element={
+          <ProtectedRoute allowedRoles={['broker']}>
+            <BrokerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/mnc"
+        element={
+          <ProtectedRoute allowedRoles={['mnc']}>
+            <MNCDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/retailer"
+        element={
+          <ProtectedRoute allowedRoles={['retailer']}>
+            <RetailerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/customer"
+        element={
+          <ProtectedRoute allowedRoles={['customer']}>
+            <CustomerDashboard />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Catch-all route */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
     return <Navigate to={`/dashboard/${profile.role}`} replace />;
   }
 
