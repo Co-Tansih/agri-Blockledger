@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Building2, Truck, Factory, Store, ShoppingBag, User } from 'lucide-react';
+import { Users, Truck, Factory, Store, User } from 'lucide-react';
 
 interface RoleSelectorProps {
   selectedRole: string;
@@ -16,11 +16,11 @@ interface RoleSelectorProps {
 
 const roles = [
   {
-    value: 'apmc',
-    label: 'APMC Official',
-    description: 'Agricultural Produce Market Committee',
-    icon: Building2,
-    color: 'text-blue-600'
+    value: 'farmer',
+    label: 'Farmer',
+    description: 'Agricultural producer and cultivator',
+    icon: Users,
+    color: 'text-green-600'
   },
   {
     value: 'broker',
@@ -37,18 +37,11 @@ const roles = [
     color: 'text-purple-600'
   },
   {
-    value: 'distributor',
-    label: 'Distributor',
-    description: 'Product distribution network',
-    icon: Truck,
-    color: 'text-indigo-600'
-  },
-  {
     value: 'retailer',
     label: 'Retailer',
     description: 'Retail store or supermarket',
     icon: Store,
-    color: 'text-green-600'
+    color: 'text-blue-600'
   },
   {
     value: 'customer',
@@ -102,10 +95,9 @@ const RoleSelector: React.FC<RoleSelectorProps> = ({ selectedRole, onRoleChange 
                 <div className="text-sm">
                   <div className="font-medium text-gray-900">{role.label}</div>
                   <div className="text-gray-600 mt-1">
-                    {role.value === 'apmc' && 'You will have access to batch creation and quality certification tools.'}
+                    {role.value === 'farmer' && 'You will have access to crop batch creation and harvest tracking tools.'}
                     {role.value === 'broker' && 'You can manage storage logs and commodity trading records.'}
                     {role.value === 'mnc' && 'Access processing workflows and QR code generation for products.'}
-                    {role.value === 'distributor' && 'Track shipments and manage distribution networks.'}
                     {role.value === 'retailer' && 'Manage shelf inventory and customer-facing product information.'}
                     {role.value === 'customer' && 'Scan QR codes to trace product journey and verify authenticity.'}
                   </div>

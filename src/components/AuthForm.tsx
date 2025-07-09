@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import RoleSelector from './RoleSelector';
 import { Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,6 +15,8 @@ const AuthForm = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { signUp, signIn, devSignIn } = useAuth();
+  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -40,30 +43,27 @@ const AuthForm = () => {
     }));
   };
 
-  // Developer login with real Supabase auth
-  const handleDeveloperLogin = async () => {
+  // Development login shortcuts
+  const handleDevLogin = async (role: string) => {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: 'dev@agri.com',
-        password: 'Dev123@agri'
-      });
+      const { error } = await devSignIn(role);
 
       if (error) {
         toast({
-          title: "Developer Login Failed",
+          title: "Dev Login Failed",
           description: error.message,
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Developer Login Successful",
-          description: "Redirecting to APMC Dashboard...",
+          title: "Dev Login Successful",
+          description: `Logged in as ${role}`,
         });
         
-        // TODO: Implement role-based redirect
-        console.log("Developer login successful", data);
+        // Navigate to role-based dashboard
+        navigate(`/dashboard/${role}`);
       }
     } catch (error: any) {
       toast({
@@ -71,7 +71,7 @@ const AuthForm = () => {
         description: "An unexpected error occurred",
         variant: "destructive",
       });
-      console.error("Developer login error:", error);
+      console.error("Dev login error:", error);
     }
     
     setLoading(false);
@@ -104,11 +104,8 @@ const AuthForm = () => {
 
     try {
       if (isLogin) {
-        // Login with Supabase
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: formData.email,
-          password: formData.password
-        });
+        // Login
+        const { error } = await signIn(formData.email, formData.password);
 
         if (error) {
           toast({
@@ -121,23 +118,14 @@ const AuthForm = () => {
             title: "Login Successful",
             description: "Redirecting to your dashboard...",
           });
-          
-          // TODO: Implement role-based redirect based on user metadata
-          console.log("Login successful", data);
         }
       } else {
-        // Signup with Supabase
-        const { data, error } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
-              full_name: formData.fullName,
-              role: formData.role,
-              district: formData.district,
-              state: formData.state
-            }
-          }
+        // Signup
+        const { error } = await signUp(formData.email, formData.password, {
+          full_name: formData.fullName,
+          role: formData.role,
+          district: formData.district,
+          state: formData.state
         });
 
         if (error) {
@@ -151,8 +139,6 @@ const AuthForm = () => {
             title: "Account Created Successfully",
             description: "Please check your email to verify your account",
           });
-          
-          console.log("Signup successful", data);
           
           // Switch to login mode after successful signup
           setIsLogin(true);
@@ -188,6 +174,14 @@ const AuthForm = () => {
     resetForm();
   };
 
+  const devRoles = [
+    { key: 'farmer', label: 'Farmer', color: 'bg-green-600 hover:bg-green-700' },
+    { key: 'broker', label: 'Broker', color: 'bg-orange-600 hover:bg-orange-700' },
+    { key: 'mnc', label: 'MNC', color: 'bg-purple-600 hover:bg-purple-700' },
+    { key: 'retailer', label: 'Retailer', color: 'bg-blue-600 hover:bg-blue-700' },
+    { key: 'customer', label: 'Customer', color: 'bg-gray-600 hover:bg-gray-700' }
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -203,19 +197,27 @@ const AuthForm = () => {
         </p>
       </div>
 
-      {/* Developer Login Button */}
+      {/* Development Login Section */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <p className="text-sm text-yellow-800 mb-2">
-          <strong>Developers:</strong> Quick access for testing
+        <p className="text-sm text-yellow-800 mb-3 font-medium">
+          🚀 Development Access - Quick Login
         </p>
-        <Button 
-          onClick={handleDeveloperLogin}
-          disabled={loading}
-          className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
-          size="sm"
-        >
-          {loading ? 'Signing in...' : 'Dev Login (dev@agri.com)'}
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          {devRoles.map((role) => (
+            <Button
+              key={role.key}
+              onClick={() => handleDevLogin(role.key)}
+              disabled={loading}
+              className={`text-white text-xs ${role.color}`}
+              size="sm"
+            >
+              {role.label}
+            </Button>
+          ))}
+        </div>
+        <p className="text-xs text-yellow-700 mt-2">
+          Test credentials: {'{role}'}@test.com / password
+        </p>
       </div>
 
       <div className="relative">
