@@ -126,11 +126,59 @@ const AuthForm = () => {
 
       if (error) {
         console.error(`Dev login error for ${role}:`, error);
-        toast({
-          title: "Dev Login Failed",
-          description: `${error.message}. Test users may still be initializing.`,
-          variant: "destructive",
-        });
+        
+        // If login fails with invalid credentials, try to recreate test users
+        if (error.message.includes('Invalid login credentials')) {
+          console.log('Invalid credentials detected, attempting to recreate test users...');
+          
+          try {
+            const { data, error: createError } = await supabase.functions.invoke('create-test-users');
+            
+            if (createError) {
+              console.error('Error recreating test users:', createError);
+              toast({
+                title: "Dev Login Failed",
+                description: "Could not recreate test users. Please try manual login.",
+                variant: "destructive",
+              });
+            } else {
+              console.log('Test users recreated, retrying login...');
+              
+              // Wait a moment for user creation to complete
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Retry the login
+              const { error: retryError } = await signIn(email, password);
+              
+              if (retryError) {
+                console.error(`Retry login error for ${role}:`, retryError);
+                toast({
+                  title: "Dev Login Failed",
+                  description: `${retryError.message}. Test user creation may have failed.`,
+                  variant: "destructive",
+                });
+              } else {
+                toast({
+                  title: "Dev Login Successful",
+                  description: `Logged in as ${role} after recreating test users. Redirecting...`,
+                });
+              }
+            }
+          } catch (recreateError: any) {
+            console.error("Error during test user recreation:", recreateError);
+            toast({
+              title: "Dev Login Failed",
+              description: "Failed to recreate test users. Please try manual login.",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Dev Login Failed",
+            description: `${error.message}. Test users may still be initializing.`,
+            variant: "destructive",
+          });
+        }
       } else {
         toast({
           title: "Dev Login Successful",
