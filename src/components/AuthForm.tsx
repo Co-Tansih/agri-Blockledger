@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,14 +8,16 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 const AuthForm = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [testUsersReady, setTestUsersReady] = useState(false);
   const { toast } = useToast();
-  const { signUp, signIn, devSignIn } = useAuth();
+  const { signUp, signIn } = useAuth();
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -27,6 +29,28 @@ const AuthForm = () => {
     district: '',
     state: ''
   });
+
+  // Create test users on component mount
+  useEffect(() => {
+    const createTestUsers = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('create-test-users');
+        
+        if (error) {
+          console.error('Error creating test users:', error);
+        } else {
+          console.log('Test users creation response:', data);
+          setTestUsersReady(true);
+        }
+      } catch (error) {
+        console.error('Failed to invoke create-test-users function:', error);
+        // Set ready to true anyway so users can try dev login
+        setTestUsersReady(true);
+      }
+    };
+
+    createTestUsers();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -48,12 +72,18 @@ const AuthForm = () => {
     setLoading(true);
     
     try {
-      const { error } = await devSignIn(role);
+      const email = `${role}@test.com`;
+      const password = 'password';
+
+      console.log(`Attempting dev login for ${role} with email: ${email}`);
+
+      const { error } = await signIn(email, password);
 
       if (error) {
+        console.error(`Dev login error for ${role}:`, error);
         toast({
           title: "Dev Login Failed",
-          description: error.message,
+          description: `${error.message}. Test users may still be initializing.`,
           variant: "destructive",
         });
       } else {
@@ -66,12 +96,12 @@ const AuthForm = () => {
         navigate(`/dashboard/${role}`);
       }
     } catch (error: any) {
+      console.error("Dev login error:", error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "An unexpected error occurred during dev login",
         variant: "destructive",
       });
-      console.error("Dev login error:", error);
     }
     
     setLoading(false);
@@ -211,13 +241,18 @@ const AuthForm = () => {
               className={`text-white text-xs ${role.color}`}
               size="sm"
             >
-              {role.label}
+              {loading ? '...' : role.label}
             </Button>
           ))}
         </div>
         <p className="text-xs text-yellow-700 mt-2">
           Test credentials: {'{role}'}@test.com / password
         </p>
+        {!testUsersReady && (
+          <p className="text-xs text-yellow-600 mt-1">
+            ⏳ Setting up test users...
+          </p>
+        )}
       </div>
 
       <div className="relative">
