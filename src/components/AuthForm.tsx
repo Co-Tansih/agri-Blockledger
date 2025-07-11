@@ -41,7 +41,7 @@ const AuthForm = () => {
           setTestUsersReady(false);
         } else if (data) {
           console.log('Test users creation response:', data);
-          setTestUsersReady(true);
+          setTestUsersReady(data.success);
         }
       } catch (error) {
         console.error('Failed to invoke create-test-users function:', error);
@@ -77,7 +77,7 @@ const AuthForm = () => {
         console.error(`Dev login error for ${role}:`, error);
         toast({
           title: "Dev Login Failed",
-          description: `${error.message}. Please ensure test users are properly set up.`,
+          description: `Failed to login as ${role}. ${error.message}`,
           variant: "destructive",
         });
       } else {
@@ -114,67 +114,143 @@ const AuthForm = () => {
     }));
   };
 
+  const validateForm = () => {
+    if (!isLogin) {
+      if (!formData.fullName.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Full name is required",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (formData.password !== formData.confirmPassword) {
+        toast({
+          title: "Validation Error",
+          description: "Passwords do not match",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (!formData.role) {
+        toast({
+          title: "Validation Error", 
+          description: "Please select your role",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (!formData.district.trim() || !formData.state.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "District and state are required",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (formData.password.length < 6) {
+        toast({
+          title: "Validation Error",
+          description: "Password must be at least 6 characters long",
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+
+    if (!formData.email.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Email is required",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (!formData.password.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Password is required",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     setLoading(true);
-
-    // Basic validation
-    if (!isLogin && formData.password !== formData.confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
-
-    if (!isLogin && !formData.role) {
-      toast({
-        title: "Error", 
-        description: "Please select your role",
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
-    }
 
     try {
       if (isLogin) {
-        // Login
+        console.log('Attempting login with:', formData.email);
         const { error } = await signIn(formData.email, formData.password);
 
         if (error) {
+          console.error('Login error:', error);
           toast({
             title: "Login Failed",
-            description: error.message,
+            description: error.message || "Invalid email or password",
             variant: "destructive",
           });
         } else {
+          console.log('Login successful');
           toast({
             title: "Login Successful",
             description: "Redirecting to your dashboard...",
           });
         }
       } else {
-        // Signup
-        const { error } = await signUp(formData.email, formData.password, {
-          full_name: formData.fullName,
+        console.log('Attempting signup with:', {
+          email: formData.email,
           role: formData.role,
           district: formData.district,
           state: formData.state
         });
 
+        const { error } = await signUp(formData.email, formData.password, {
+          full_name: formData.fullName.trim(),
+          role: formData.role,
+          district: formData.district.trim(),
+          state: formData.state.trim()
+        });
+
         if (error) {
+          console.error('Signup error:', error);
+          let errorMessage = error.message;
+          
+          // Handle specific error cases
+          if (error.message.includes('User already registered') || error.message.includes('already been registered')) {
+            errorMessage = "An account with this email already exists. Please try logging in instead.";
+          } else if (error.message.includes('Invalid email')) {
+            errorMessage = "Please enter a valid email address.";
+          } else if (error.message.includes('Password')) {
+            errorMessage = "Password must be at least 6 characters long.";
+          } else if (error.message.includes('Database error') || error.message.includes('user_role')) {
+            errorMessage = "There was a database error. Please try again in a moment.";
+          }
+
           toast({
             title: "Signup Failed",
-            description: error.message,
+            description: errorMessage,
             variant: "destructive",
           });
         } else {
+          console.log('Signup successful');
           toast({
             title: "Account Created Successfully",
-            description: "Please check your email to verify your account",
+            description: "Please check your email to verify your account, or try logging in directly.",
           });
           
           // Switch to login mode after successful signup
@@ -183,12 +259,12 @@ const AuthForm = () => {
         }
       }
     } catch (error: any) {
+      console.error("Unexpected auth error:", error);
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
-      console.error("Auth error:", error);
     }
     
     setLoading(false);
@@ -244,7 +320,7 @@ const AuthForm = () => {
             <Button
               key={role.key}
               onClick={() => handleDevLogin(role.key)}
-              disabled={devLoginLoading || loading || !testUsersReady}
+              disabled={devLoginLoading || loading}
               className={`text-white text-xs ${role.color}`}
               size="sm"
             >
@@ -274,7 +350,7 @@ const AuthForm = () => {
         {/* Full Name - Only for signup */}
         {!isLogin && (
           <div>
-            <Label htmlFor="fullName" className="text-gray-700">Full Name</Label>
+            <Label htmlFor="fullName" className="text-gray-700">Full Name *</Label>
             <Input
               id="fullName"
               name="fullName"
@@ -290,7 +366,7 @@ const AuthForm = () => {
 
         {/* Email */}
         <div>
-          <Label htmlFor="email" className="text-gray-700">Email Address</Label>
+          <Label htmlFor="email" className="text-gray-700">Email Address *</Label>
           <Input
             id="email"
             name="email"
@@ -305,7 +381,7 @@ const AuthForm = () => {
 
         {/* Password */}
         <div>
-          <Label htmlFor="password" className="text-gray-700">Password</Label>
+          <Label htmlFor="password" className="text-gray-700">Password *</Label>
           <div className="relative mt-1">
             <Input
               id="password"
@@ -315,7 +391,7 @@ const AuthForm = () => {
               onChange={handleInputChange}
               required
               className="pr-10 focus:ring-green-500 focus:border-green-500"
-              placeholder="Enter your password"
+              placeholder={isLogin ? "Enter your password" : "At least 6 characters"}
             />
             <button
               type="button"
@@ -334,7 +410,7 @@ const AuthForm = () => {
         {/* Confirm Password - Only for signup */}
         {!isLogin && (
           <div>
-            <Label htmlFor="confirmPassword" className="text-gray-700">Confirm Password</Label>
+            <Label htmlFor="confirmPassword" className="text-gray-700">Confirm Password *</Label>
             <div className="relative mt-1">
               <Input
                 id="confirmPassword"
@@ -364,7 +440,7 @@ const AuthForm = () => {
         {/* Role Selection - Only for signup */}
         {!isLogin && (
           <div>
-            <Label className="text-gray-700">Select Your Role</Label>
+            <Label className="text-gray-700">Select Your Role *</Label>
             <RoleSelector selectedRole={formData.role} onRoleChange={handleRoleChange} />
           </div>
         )}
@@ -373,7 +449,7 @@ const AuthForm = () => {
         {!isLogin && (
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="district" className="text-gray-700">District</Label>
+              <Label htmlFor="district" className="text-gray-700">District *</Label>
               <Input
                 id="district"
                 name="district"
@@ -386,7 +462,7 @@ const AuthForm = () => {
               />
             </div>
             <div>
-              <Label htmlFor="state" className="text-gray-700">State</Label>
+              <Label htmlFor="state" className="text-gray-700">State *</Label>
               <Input
                 id="state"
                 name="state"
