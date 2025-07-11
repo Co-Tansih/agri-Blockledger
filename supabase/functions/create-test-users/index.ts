@@ -43,125 +43,110 @@ serve(async (req) => {
       try {
         console.log(`Processing test user: ${user.email}`);
         
-        // Try to create new user with explicit password
-        console.log(`Creating new test user: ${user.email}`);
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: user.email,
-          password: user.password,
-          email_confirm: true, // Auto-confirm email for test users
-          user_metadata: {
-            full_name: user.full_name,
-            role: user.role,
-            district: user.district,
-            state: user.state
-          }
-        });
-
-        if (authError) {
-          // If user already exists, try to update the password
-          if (authError.message.includes('already been registered')) {
-            console.log(`User ${user.email} already exists, updating password...`);
-            
-            // Get existing user by email using listUsers
-            const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
-            
-            if (listError) {
-              console.error(`Error listing users:`, listError);
-              results.push({ email: user.email, status: 'list_error', error: listError.message });
-              continue;
-            }
-            
-            const existingUser = existingUsers.users.find(u => u.email === user.email);
-            
-            if (existingUser) {
-              // Update the existing user's password
-              const { error: updateError } = await supabase.auth.admin.updateUserById(
-                existingUser.id,
-                { password: user.password }
-              );
-              
-              if (updateError) {
-                console.error(`Error updating password for ${user.email}:`, updateError);
-                results.push({ email: user.email, status: 'password_update_error', error: updateError.message });
-                continue;
-              }
-              
-              // Ensure profile exists
-              const { data: existingProfile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', existingUser.id)
-                .single();
-                
-              if (!existingProfile) {
-                console.log(`Creating missing profile for ${user.email}`);
-                const { error: profileError } = await supabase
-                  .from('profiles')
-                  .insert({
-                    id: existingUser.id,
-                    email: user.email,
-                    full_name: user.full_name,
-                    role: user.role,
-                    district: user.district,
-                    state: user.state
-                  });
-                  
-                if (profileError) {
-                  console.error(`Error creating profile for existing user ${user.email}:`, profileError);
-                  results.push({ email: user.email, status: 'profile_creation_error', error: profileError.message });
-                } else {
-                  results.push({ email: user.email, status: 'updated_with_profile_created' });
-                }
-              } else {
-                results.push({ email: user.email, status: 'already_exists_updated' });
-              }
-            } else {
-              results.push({ email: user.email, status: 'user_not_found_after_list', error: 'User not found in list' });
-            }
-          } else {
-            console.error(`Error creating user ${user.email}:`, authError);
-            results.push({ email: user.email, status: 'auth_error', error: authError.message });
-          }
-          continue;
-        }
-
-        if (authData.user) {
-          console.log(`Successfully created auth user: ${user.email}`);
+        // Check if user already exists
+        const { data: existingUsers } = await supabase.auth.admin.listUsers();
+        const existingUser = existingUsers.users.find(u => u.email === user.email);
+        
+        if (existingUser) {
+          // User exists, update password and ensure profile exists
+          console.log(`User ${user.email} already exists, updating...`);
           
-          // Wait for the user creation to fully complete
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          const { error: updateError } = await supabase.auth.admin.updateUserById(
+            existingUser.id,
+            { password: user.password }
+          );
           
-          // Check if profile was created by trigger
-          const { data: triggerProfile } = await supabase
+          if (updateError) {
+            console.error(`Error updating password for ${user.email}:`, updateError);
+            results.push({ email: user.email, status: 'password_update_error', error: updateError.message });
+            continue;
+          }
+          
+          // Check if profile exists
+          const { data: existingProfile } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', authData.user.id)
+            .eq('id', existingUser.id)
             .single();
             
-          if (!triggerProfile) {
-            console.log(`Trigger didn't create profile, creating manually for ${user.email}`);
-            // Create profile manually if trigger didn't work
+          if (!existingProfile) {
+            console.log(`Creating missing profile for ${user.email}`);
             const { error: profileError } = await supabase
               .from('profiles')
               .insert({
-                id: authData.user.id,
+                id: existingUser.id,
                 email: user.email,
                 full_name: user.full_name,
                 role: user.role,
                 district: user.district,
                 state: user.state
               });
-
+              
             if (profileError) {
-              console.error(`Error creating profile for ${user.email}:`, profileError);
-              results.push({ email: user.email, status: 'auth_created_profile_error', error: profileError.message });
+              console.error(`Error creating profile for existing user ${user.email}:`, profileError);
+              results.push({ email: user.email, status: 'profile_creation_error', error: profileError.message });
             } else {
-              console.log(`Successfully created profile manually for: ${user.email}`);
-              results.push({ email: user.email, status: 'created_with_manual_profile' });
+              results.push({ email: user.email, status: 'updated_with_profile_created' });
             }
           } else {
-            console.log(`Profile created by trigger for: ${user.email}`);
-            results.push({ email: user.email, status: 'created_with_trigger' });
+            results.push({ email: user.email, status: 'already_exists_updated' });
+          }
+        } else {
+          // Create new user
+          console.log(`Creating new test user: ${user.email}`);
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: user.email,
+            password: user.password,
+            email_confirm: true,
+            user_metadata: {
+              full_name: user.full_name,
+              role: user.role,
+              district: user.district,
+              state: user.state
+            }
+          });
+
+          if (authError) {
+            console.error(`Error creating user ${user.email}:`, authError);
+            results.push({ email: user.email, status: 'auth_error', error: authError.message });
+            continue;
+          }
+
+          if (authData.user) {
+            console.log(`Successfully created auth user: ${user.email}`);
+            
+            // Wait a moment for the trigger to process
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Verify profile was created by trigger
+            const { data: triggerProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', authData.user.id)
+              .single();
+              
+            if (!triggerProfile) {
+              console.log(`Trigger didn't create profile, creating manually for ${user.email}`);
+              const { error: profileError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: authData.user.id,
+                  email: user.email,
+                  full_name: user.full_name,
+                  role: user.role,
+                  district: user.district,
+                  state: user.state
+                });
+
+              if (profileError) {
+                console.error(`Error creating profile for ${user.email}:`, profileError);
+                results.push({ email: user.email, status: 'auth_created_profile_error', error: profileError.message });
+              } else {
+                results.push({ email: user.email, status: 'created_with_manual_profile' });
+              }
+            } else {
+              results.push({ email: user.email, status: 'created_with_trigger' });
+            }
           }
         }
       } catch (error) {
@@ -172,52 +157,19 @@ serve(async (req) => {
 
     console.log('Test user creation results:', results);
 
-    // Final verification - test all users can login
-    const verificationResults = [];
-    const testClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') || '');
-    
-    for (const user of testUsers) {
-      try {
-        const { error: loginError } = await testClient.auth.signInWithPassword({
-          email: user.email,
-          password: user.password
-        });
-        
-        verificationResults.push({
-          email: user.email,
-          canLogin: !loginError,
-          error: loginError?.message || null
-        });
-        
-        // Sign out after test
-        if (!loginError) {
-          await testClient.auth.signOut();
-        }
-      } catch (error) {
-        verificationResults.push({
-          email: user.email,
-          canLogin: false,
-          error: error.message
-        });
-      }
-    }
-
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Test user creation process completed',
         results,
-        verification: verificationResults,
         summary: {
           total: results.length,
-          created: results.filter(r => r.status.includes('created')).length,
-          existing: results.filter(r => r.status.includes('already_exists') || r.status.includes('updated')).length,
-          errors: results.filter(r => r.status.includes('error')).length,
-          loginVerification: {
-            total: verificationResults.length,
-            canLogin: verificationResults.filter(v => v.canLogin).length,
-            cannotLogin: verificationResults.filter(v => !v.canLogin).length
-          }
+          successful: results.filter(r => 
+            r.status.includes('created') || 
+            r.status.includes('updated') || 
+            r.status.includes('already_exists')
+          ).length,
+          errors: results.filter(r => r.status.includes('error')).length
         }
       }),
       { 

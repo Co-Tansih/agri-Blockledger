@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,6 @@ import RoleSelector from './RoleSelector';
 import { Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
 const AuthForm = () => {
@@ -15,9 +15,9 @@ const AuthForm = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [devLoginLoading, setDevLoginLoading] = useState(false);
+  const [testUsersReady, setTestUsersReady] = useState(false);
   const { toast } = useToast();
   const { signUp, signIn } = useAuth();
-  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -38,19 +38,31 @@ const AuthForm = () => {
         
         if (error) {
           console.error('Error creating test users:', error);
+          setTestUsersReady(false);
         } else if (data) {
           console.log('Test users creation response:', data);
+          setTestUsersReady(true);
         }
       } catch (error) {
         console.error('Failed to invoke create-test-users function:', error);
+        setTestUsersReady(false);
       }
     };
 
     createTestUsers();
   }, []);
 
-  // Enhanced development login
+  // Development login handler
   const handleDevLogin = async (role: string) => {
+    if (!testUsersReady) {
+      toast({
+        title: "Test Users Not Ready",
+        description: "Test users are still being set up. Please wait a moment and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setDevLoginLoading(true);
     
     try {
@@ -65,16 +77,15 @@ const AuthForm = () => {
         console.error(`Dev login error for ${role}:`, error);
         toast({
           title: "Dev Login Failed",
-          description: `${error.message}. Test users may need to be set up.`,
+          description: `${error.message}. Please ensure test users are properly set up.`,
           variant: "destructive",
         });
       } else {
         console.log(`Successfully logged in as ${role}`);
         toast({
           title: "Dev Login Successful",
-          description: `Logged in as ${role}. Redirecting...`,
+          description: `Logged in as ${role}. Redirecting to dashboard...`,
         });
-        // Navigation will be handled by the AuthContext and App.tsx routing
       }
     } catch (error: any) {
       console.error("Dev login error:", error);
@@ -233,7 +244,7 @@ const AuthForm = () => {
             <Button
               key={role.key}
               onClick={() => handleDevLogin(role.key)}
-              disabled={devLoginLoading || loading}
+              disabled={devLoginLoading || loading || !testUsersReady}
               className={`text-white text-xs ${role.color}`}
               size="sm"
             >
@@ -242,7 +253,10 @@ const AuthForm = () => {
           ))}
         </div>
         <p className="text-xs text-yellow-700 mt-2">
-          Test credentials: {'{role}'}@test.com / password
+          {testUsersReady 
+            ? 'Test credentials: {role}@test.com / password'
+            : 'Setting up test users...'
+          }
         </p>
       </div>
 
