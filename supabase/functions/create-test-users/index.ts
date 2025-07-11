@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -42,77 +43,7 @@ serve(async (req) => {
       try {
         console.log(`Processing test user: ${user.email}`);
         
-        // First check if user already exists
-        const { data: existingUser } = await supabase.auth.admin.getUserByEmail(user.email);
-        
-        if (existingUser.user) {
-          console.log(`User ${user.email} already exists, checking login capability`);
-          
-          // Test if the existing user can actually log in
-          const testClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') || '');
-          const { error: loginTest } = await testClient.auth.signInWithPassword({
-            email: user.email,
-            password: user.password
-          });
-          
-          if (loginTest) {
-            console.log(`Existing user ${user.email} cannot login, recreating...`);
-            
-            // Delete the existing user and recreate
-            const { error: deleteError } = await supabase.auth.admin.deleteUser(existingUser.user.id);
-            if (deleteError) {
-              console.error(`Error deleting user ${user.email}:`, deleteError);
-              results.push({ 
-                email: user.email, 
-                status: 'delete_error', 
-                error: deleteError.message 
-              });
-              continue;
-            }
-            
-            // Wait a moment for deletion to complete
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          } else {
-            console.log(`User ${user.email} can login successfully`);
-            
-            // Ensure profile exists for existing user
-            const { data: existingProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', existingUser.user.id)
-              .single();
-              
-            if (!existingProfile) {
-              console.log(`Creating missing profile for ${user.email}`);
-              const { error: profileError } = await supabase
-                .from('profiles')
-                .insert({
-                  id: existingUser.user.id,
-                  email: user.email,
-                  full_name: user.full_name,
-                  role: user.role,
-                  district: user.district,
-                  state: user.state
-                });
-                
-              if (profileError) {
-                console.error(`Error creating profile for existing user ${user.email}:`, profileError);
-                results.push({ 
-                  email: user.email, 
-                  status: 'profile_creation_error', 
-                  error: profileError.message 
-                });
-              } else {
-                results.push({ email: user.email, status: 'profile_created' });
-              }
-            } else {
-              results.push({ email: user.email, status: 'already_exists_and_working' });
-            }
-            continue;
-          }
-        }
-        
-        // Create new user with explicit password
+        // Try to create new user with explicit password
         console.log(`Creating new test user: ${user.email}`);
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: user.email,
@@ -127,8 +58,70 @@ serve(async (req) => {
         });
 
         if (authError) {
-          console.error(`Error creating user ${user.email}:`, authError);
-          results.push({ email: user.email, status: 'auth_error', error: authError.message });
+          // If user already exists, try to update the password
+          if (authError.message.includes('already been registered')) {
+            console.log(`User ${user.email} already exists, updating password...`);
+            
+            // Get existing user by email using listUsers
+            const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+            
+            if (listError) {
+              console.error(`Error listing users:`, listError);
+              results.push({ email: user.email, status: 'list_error', error: listError.message });
+              continue;
+            }
+            
+            const existingUser = existingUsers.users.find(u => u.email === user.email);
+            
+            if (existingUser) {
+              // Update the existing user's password
+              const { error: updateError } = await supabase.auth.admin.updateUserById(
+                existingUser.id,
+                { password: user.password }
+              );
+              
+              if (updateError) {
+                console.error(`Error updating password for ${user.email}:`, updateError);
+                results.push({ email: user.email, status: 'password_update_error', error: updateError.message });
+                continue;
+              }
+              
+              // Ensure profile exists
+              const { data: existingProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', existingUser.id)
+                .single();
+                
+              if (!existingProfile) {
+                console.log(`Creating missing profile for ${user.email}`);
+                const { error: profileError } = await supabase
+                  .from('profiles')
+                  .insert({
+                    id: existingUser.id,
+                    email: user.email,
+                    full_name: user.full_name,
+                    role: user.role,
+                    district: user.district,
+                    state: user.state
+                  });
+                  
+                if (profileError) {
+                  console.error(`Error creating profile for existing user ${user.email}:`, profileError);
+                  results.push({ email: user.email, status: 'profile_creation_error', error: profileError.message });
+                } else {
+                  results.push({ email: user.email, status: 'updated_with_profile_created' });
+                }
+              } else {
+                results.push({ email: user.email, status: 'already_exists_updated' });
+              }
+            } else {
+              results.push({ email: user.email, status: 'user_not_found_after_list', error: 'User not found in list' });
+            }
+          } else {
+            console.error(`Error creating user ${user.email}:`, authError);
+            results.push({ email: user.email, status: 'auth_error', error: authError.message });
+          }
           continue;
         }
 
@@ -136,53 +129,7 @@ serve(async (req) => {
           console.log(`Successfully created auth user: ${user.email}`);
           
           // Wait for the user creation to fully complete
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Test login immediately after creation
-          const testClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') || '');
-          const { error: loginTest } = await testClient.auth.signInWithPassword({
-            email: user.email,
-            password: user.password
-          });
-          
-          if (loginTest) {
-            console.error(`Newly created user ${user.email} cannot login:`, loginTest);
-            
-            // Try to update the password explicitly
-            const { error: updateError } = await supabase.auth.admin.updateUserById(
-              authData.user.id,
-              { password: user.password }
-            );
-            
-            if (updateError) {
-              console.error(`Error updating password for ${user.email}:`, updateError);
-              results.push({ 
-                email: user.email, 
-                status: 'password_update_error', 
-                error: updateError.message 
-              });
-              continue;
-            }
-            
-            // Wait and test login again
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const { error: retryLoginTest } = await testClient.auth.signInWithPassword({
-              email: user.email,
-              password: user.password
-            });
-            
-            if (retryLoginTest) {
-              console.error(`User ${user.email} still cannot login after password update:`, retryLoginTest);
-              results.push({ 
-                email: user.email, 
-                status: 'login_still_failed', 
-                error: retryLoginTest.message 
-              });
-              continue;
-            }
-          }
-          
-          console.log(`User ${user.email} can login successfully`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Check if profile was created by trigger
           const { data: triggerProfile } = await supabase
@@ -207,11 +154,7 @@ serve(async (req) => {
 
             if (profileError) {
               console.error(`Error creating profile for ${user.email}:`, profileError);
-              results.push({ 
-                email: user.email, 
-                status: 'auth_created_profile_error', 
-                error: profileError.message 
-              });
+              results.push({ email: user.email, status: 'auth_created_profile_error', error: profileError.message });
             } else {
               console.log(`Successfully created profile manually for: ${user.email}`);
               results.push({ email: user.email, status: 'created_with_manual_profile' });
@@ -223,11 +166,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Unexpected error processing user ${user.email}:`, error);
-        results.push({ 
-          email: user.email, 
-          status: 'unexpected_error', 
-          error: error.message 
-        });
+        results.push({ email: user.email, status: 'unexpected_error', error: error.message });
       }
     }
 
@@ -272,7 +211,7 @@ serve(async (req) => {
         summary: {
           total: results.length,
           created: results.filter(r => r.status.includes('created')).length,
-          existing: results.filter(r => r.status.includes('already_exists')).length,
+          existing: results.filter(r => r.status.includes('already_exists') || r.status.includes('updated')).length,
           errors: results.filter(r => r.status.includes('error')).length,
           loginVerification: {
             total: verificationResults.length,

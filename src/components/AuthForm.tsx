@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +14,7 @@ const AuthForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [testUsersReady, setTestUsersReady] = useState(false);
+  const [devLoginLoading, setDevLoginLoading] = useState(false);
   const { toast } = useToast();
   const { signUp, signIn } = useAuth();
   const navigate = useNavigate();
@@ -39,90 +38,20 @@ const AuthForm = () => {
         
         if (error) {
           console.error('Error creating test users:', error);
-          toast({
-            title: "Test Users Setup Failed",
-            description: "Development login may not work properly.",
-            variant: "destructive",
-          });
-          setTestUsersReady(false);
         } else if (data) {
           console.log('Test users creation response:', data);
-          
-          // Check verification results
-          if (data.verification) {
-            const loginIssues = data.verification.filter((v: any) => !v.canLogin);
-            if (loginIssues.length > 0) {
-              console.error('Some test users cannot login:', loginIssues);
-              toast({
-                title: "Test Users Login Issues",
-                description: `${loginIssues.length} test users cannot login. Check console for details.`,
-                variant: "destructive",
-              });
-              setTestUsersReady(false);
-            } else {
-              console.log('All test users verified and can login');
-              toast({
-                title: "Test Users Ready",
-                description: "All development accounts are set up and verified.",
-              });
-              setTestUsersReady(true);
-            }
-          } else {
-            // Fallback to checking results if verification is not available
-            const hasErrors = data.results && data.results.some((result: any) => result.status.includes('error'));
-            if (hasErrors) {
-              console.error('Some test users failed to create:', data.results);
-              toast({
-                title: "Partial Test Users Setup",
-                description: "Some development accounts may not be available.",
-                variant: "destructive",
-              });
-              setTestUsersReady(false);
-            } else {
-              console.log('Test users created successfully');
-              setTestUsersReady(true);
-            }
-          }
-        } else {
-          console.log('Test users function completed');
-          setTestUsersReady(true);
         }
       } catch (error) {
         console.error('Failed to invoke create-test-users function:', error);
-        toast({
-          title: "Function Invocation Failed",
-          description: "Could not set up test users. Development login unavailable.",
-          variant: "destructive",
-        });
-        setTestUsersReady(false);
       }
     };
 
     createTestUsers();
   }, []);
 
-  // Test login function to verify credentials work
-  const testLoginCredentials = async (email: string, password: string) => {
-    try {
-      const { error } = await signIn(email, password);
-      return { success: !error, error };
-    } catch (error: any) {
-      return { success: false, error };
-    }
-  };
-
-  // Enhanced development login with better error handling
+  // Enhanced development login
   const handleDevLogin = async (role: string) => {
-    if (!testUsersReady) {
-      toast({
-        title: "Please wait",
-        description: "Test users are still being set up. Please try again in a moment.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
+    setDevLoginLoading(true);
     
     try {
       const email = `${role}@test.com`;
@@ -134,71 +63,18 @@ const AuthForm = () => {
 
       if (error) {
         console.error(`Dev login error for ${role}:`, error);
-        
-        // If login fails, try to recreate the specific user
-        if (error.message.includes('Invalid login credentials')) {
-          console.log('Invalid credentials detected, attempting to recreate test users...');
-          
-          toast({
-            title: "Recreating Test Users",
-            description: "Login failed, attempting to fix test users...",
-          });
-          
-          try {
-            const { data, error: createError } = await supabase.functions.invoke('create-test-users');
-            
-            if (createError) {
-              console.error('Error recreating test users:', createError);
-              toast({
-                title: "Dev Login Failed",
-                description: "Could not recreate test users. Please try manual login.",
-                variant: "destructive",
-              });
-            } else {
-              console.log('Test users recreated, retrying login...');
-              
-              // Wait for user creation to complete
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              
-              // Retry the login
-              const { error: retryError } = await signIn(email, password);
-              
-              if (retryError) {
-                console.error(`Retry login error for ${role}:`, retryError);
-                toast({
-                  title: "Dev Login Still Failed",
-                  description: `${retryError.message}. Please check the console for details.`,
-                  variant: "destructive",
-                });
-              } else {
-                console.log(`Successfully logged in as ${role} after recreation`);
-                toast({
-                  title: "Dev Login Successful",
-                  description: `Logged in as ${role} after recreating test users. Redirecting...`,
-                });
-              }
-            }
-          } catch (recreateError: any) {
-            console.error("Error during test user recreation:", recreateError);
-            toast({
-              title: "Dev Login Failed",
-              description: "Failed to recreate test users. Please try manual login.",
-              variant: "destructive",
-            });
-          }
-        } else {
-          toast({
-            title: "Dev Login Failed",
-            description: `${error.message}. Please check if test users are properly set up.`,
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Dev Login Failed",
+          description: `${error.message}. Test users may need to be set up.`,
+          variant: "destructive",
+        });
       } else {
         console.log(`Successfully logged in as ${role}`);
         toast({
           title: "Dev Login Successful",
           description: `Logged in as ${role}. Redirecting...`,
         });
+        // Navigation will be handled by the AuthContext and App.tsx routing
       }
     } catch (error: any) {
       console.error("Dev login error:", error);
@@ -209,7 +85,7 @@ const AuthForm = () => {
       });
     }
     
-    setLoading(false);
+    setDevLoginLoading(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -357,22 +233,17 @@ const AuthForm = () => {
             <Button
               key={role.key}
               onClick={() => handleDevLogin(role.key)}
-              disabled={loading}
+              disabled={devLoginLoading || loading}
               className={`text-white text-xs ${role.color}`}
               size="sm"
             >
-              {loading ? '...' : role.label}
+              {devLoginLoading || loading ? '...' : role.label}
             </Button>
           ))}
         </div>
         <p className="text-xs text-yellow-700 mt-2">
           Test credentials: {'{role}'}@test.com / password
         </p>
-        {!testUsersReady && (
-          <p className="text-xs text-yellow-600 mt-1">
-            ⏳ Setting up test users...
-          </p>
-        )}
       </div>
 
       <div className="relative">
@@ -519,7 +390,7 @@ const AuthForm = () => {
         {/* Submit Button */}
         <Button
           type="submit"
-          disabled={loading}
+          disabled={loading || devLoginLoading}
           className="w-full bg-green-600 hover:bg-green-700 text-white py-2.5 transition-colors"
         >
           {loading 
