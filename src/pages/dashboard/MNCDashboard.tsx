@@ -1,12 +1,32 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Factory, Package2, Users, BarChart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { MNCActivityForm } from '@/components/forms/MNCActivityForm';
+import { Factory, Package2, Users, BarChart, Plus } from 'lucide-react';
 
 const MNCDashboard = () => {
+  const [showActivityForm, setShowActivityForm] = useState(false);
+
   return (
     <DashboardLayout title="MNC Dashboard">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h3 className="text-lg font-medium">Monitor your manufacturing operations</h3>
+        </div>
+        <Button onClick={() => setShowActivityForm(!showActivityForm)} variant="default">
+          <Plus className="mr-2 h-4 w-4" />
+          {showActivityForm ? 'Hide Form' : 'Log Manufacturing'}
+        </Button>
+      </div>
+
+      {showActivityForm && (
+        <div className="mb-6">
+          <MNCActivityForm onSuccess={() => setShowActivityForm(false)} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

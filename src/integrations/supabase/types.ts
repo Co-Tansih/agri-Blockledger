@@ -14,6 +14,151 @@ export type Database = {
   }
   public: {
     Tables: {
+      activities: {
+        Row: {
+          activity_type: string
+          actor_id: string
+          actor_role: Database["public"]["Enums"]["user_role"]
+          created_at: string | null
+          extra_data: Json | null
+          id: string
+          timestamp: string
+          trace_id: string
+        }
+        Insert: {
+          activity_type: string
+          actor_id: string
+          actor_role: Database["public"]["Enums"]["user_role"]
+          created_at?: string | null
+          extra_data?: Json | null
+          id?: string
+          timestamp: string
+          trace_id: string
+        }
+        Update: {
+          activity_type?: string
+          actor_id?: string
+          actor_role?: Database["public"]["Enums"]["user_role"]
+          created_at?: string | null
+          extra_data?: Json | null
+          id?: string
+          timestamp?: string
+          trace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_trace_id_fkey"
+            columns: ["trace_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["trace_id"]
+          },
+        ]
+      }
+      batches: {
+        Row: {
+          batch_id: string
+          created_at: string | null
+          farmer_id: string
+          id: string
+          location_district: string
+          location_state: string
+          product_name: string
+          production_date: string
+          quantity: number
+          quantity_unit: string
+          trace_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string | null
+          farmer_id: string
+          id?: string
+          location_district: string
+          location_state: string
+          product_name: string
+          production_date: string
+          quantity: number
+          quantity_unit?: string
+          trace_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string | null
+          farmer_id?: string
+          id?: string
+          location_district?: string
+          location_state?: string
+          product_name?: string
+          production_date?: string
+          quantity?: number
+          quantity_unit?: string
+          trace_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batches_farmer_id_fkey"
+            columns: ["farmer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media: {
+        Row: {
+          created_at: string | null
+          gps_latitude: number | null
+          gps_longitude: number | null
+          id: string
+          metadata: Json | null
+          photo_url: string
+          timestamp: string
+          trace_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          gps_latitude?: number | null
+          gps_longitude?: number | null
+          id?: string
+          metadata?: Json | null
+          photo_url: string
+          timestamp: string
+          trace_id: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          gps_latitude?: number | null
+          gps_longitude?: number | null
+          id?: string
+          metadata?: Json | null
+          photo_url?: string
+          timestamp?: string
+          trace_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_trace_id_fkey"
+            columns: ["trace_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["trace_id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -52,7 +197,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_batch_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_trace_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       user_role: "farmer" | "broker" | "mnc" | "retailer" | "customer"
